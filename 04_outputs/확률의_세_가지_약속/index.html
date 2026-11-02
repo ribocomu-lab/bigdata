@@ -1,0 +1,464 @@
+<title>주사위 확률 교실</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap">
+<style>
+/* 레이아웃: 위에서 아래로 읽는 한 줄 교실. 맨 위 주사위 실험 → 약속 1·2·3 → 퀴즈. 각 약속은 '설명 + 직접 해보는 장치' 2단(좁으면 1단) */
+/* 흰 배경 한 가지 테마로 고정 (다크 모드에서도 흰 배경) */
+:root {
+  color-scheme: light;
+  --bg: #ffffff;          /* 페이지 배경: 흰색 */
+  --panel: #ffffff;
+  --tint: #f5f6fa;        /* 실험 상자·공식 칸의 아주 옅은 회색 */
+  --ink: #1d2533;
+  --muted: #5a6577;
+  --line: #e1e5ee;
+  --accent: #6b4f8a;      /* 보라: 주사위 테두리·강조 */
+  --accent-soft: #cdb9ef; /* 연보라: 주사위 옆면 */
+  --pip: #2a2140;         /* 주사위 눈 */
+  --pip-one: #e2463f;     /* 1의 눈은 빨갛게 (실제 주사위처럼) */
+  --blush: #ffb7c8;
+  --ok: #1f8a4c;
+  --bad: #c2362f;
+  --font-display: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-body: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-num: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 17px; line-height: 1.7;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px;
+}
+.wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 800; line-height: 1.3; letter-spacing: -0.02em; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2rem, 5.5vw, 3.2rem); }
+h2 { font-size: clamp(1.5rem, 4vw, 2.1rem); }
+h3 { font-size: 1.15rem; font-weight: 700; }
+p { margin: 0; max-width: 62ch; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.eyebrow { color: var(--accent); letter-spacing: .06em; font-size: 1rem; }
+.eyebrow, .badge, button, .rolled, .readout, .result-big, .score, .lab-title, .summary b { font-weight: 700; }
+
+button {
+  font-family: var(--font-display); font-size: 1.02rem; cursor: pointer;
+  border: 2px solid var(--ink); background: var(--panel); color: var(--ink);
+  border-radius: 999px; padding: 8px 18px; transition: transform .12s ease;
+}
+button:hover { transform: translateY(-2px); }
+button:active { transform: translateY(1px); }
+button:focus-visible, .chip:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ===== 주사위 면 공통 (3×3 칸에 눈을 찍어요) ===== */
+.die {
+  --s: 44px;
+  width: var(--s); height: var(--s); flex: none;
+  background: #fff; border: 2px solid var(--accent); border-radius: 22%;
+  box-shadow: calc(var(--s) * .07) calc(var(--s) * .09) 0 var(--accent-soft);
+  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+  /* 안쪽 여백을 %로 주면 부모 너비 기준이 되어 주사위가 커지고 눈이 사라져요 → 주사위 크기(--s) 기준으로 계산 */
+  padding: calc(var(--s) * .13); gap: calc(var(--s) * .04);
+  transition: opacity .25s, filter .25s, transform .3s cubic-bezier(.3,1.6,.5,1);
+}
+.die i { border-radius: 50%; }
+.die i.on { background: var(--pip); }
+.die.one i.on { background: var(--pip-one); transform: scale(1.35); }
+.die.sm { --s: 30px; border-width: 1.5px; }
+.die.md { --s: 52px; }
+.die.dim { opacity: .25; filter: grayscale(.7); }
+.die.pick { transform: translateY(-6px); }
+
+/* ===== 히어로: 큰 주사위 ===== */
+.hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 36px; align-items: center; }
+.hero > * { min-width: 0; }
+.hero-text { display: flex; flex-direction: column; gap: 16px; }
+.hero-text .lead { font-size: 1.12rem; color: var(--muted); }
+.faces { display: flex; flex-wrap: wrap; gap: 10px; }
+.assume { font-size: .92rem; color: var(--muted); border-left: 3px solid var(--accent-soft); padding-left: 12px; }
+
+.stage { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.big-wrap { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 8px; }
+.big-wrap .die { --s: min(150px, 38vw); border-width: 4px; }
+.big-wrap .floor { width: 120px; height: 14px; border-radius: 50%; background: var(--line); }
+.big-wrap .cheeks { position: absolute; bottom: 30px; width: min(150px, 38vw); display: flex; justify-content: space-between; padding: 0 8px; pointer-events: none; }
+.big-wrap .cheeks span { width: 22px; height: 11px; border-radius: 50%; background: var(--blush); opacity: .9; }
+.rolling { animation: tumble .6s ease; }
+@keyframes tumble {
+  0% { transform: translateY(0) rotate(0); }
+  30% { transform: translateY(-38px) rotate(-120deg); }
+  60% { transform: translateY(-10px) rotate(-250deg); }
+  80% { transform: translateY(-4px) rotate(-345deg); }
+  100% { transform: translateY(0) rotate(-360deg); }
+}
+.rolled { min-height: 36px; font-size: 1.25rem; text-align: center; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+
+.stats { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 8px; }
+.stat-row { display: grid; grid-template-columns: 34px 1fr 96px; gap: 10px; align-items: center; font-size: .9rem; }
+.bar { position: relative; height: 14px; background: var(--line); border-radius: 7px; }
+.bar i { display: block; height: 100%; border-radius: 7px; width: 0; background: var(--accent); transition: width .3s; }
+.bar b { position: absolute; top: -4px; bottom: -4px; width: 0; border-left: 2px dashed var(--ink); }
+.stats .note { font-size: .85rem; color: var(--muted); text-align: center; }
+
+/* ===== 약속 섹션 ===== */
+.rule {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 22px;
+  padding: clamp(20px, 4vw, 36px);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 32px;
+}
+.rule > * { min-width: 0; }
+.rule-head { grid-column: 1 / -1; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.badge { font-size: 1rem; background: var(--accent); color: #fff; padding: 4px 14px; border-radius: 999px; }
+.explain { display: flex; flex-direction: column; gap: 14px; }
+.formula {
+  font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 1.02rem; font-weight: 500;
+  background: var(--tint); border-radius: 12px; padding: 12px 16px; overflow-x: auto; white-space: nowrap;
+}
+.lab { display: flex; flex-direction: column; gap: 16px; background: var(--tint); border-radius: 16px; padding: 20px; }
+.lab-title { color: var(--muted); font-size: .95rem; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  font-family: var(--font-body); font-size: .93rem; border: 1.5px solid var(--line);
+  background: var(--panel); color: var(--ink); border-radius: 999px; padding: 6px 14px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
+
+/* 약속 1: 확률 자 */
+.ruler-box { overflow-x: auto; }
+.ruler { position: relative; height: 108px; margin: 0 18px; min-width: 260px; }
+.ruler .track { position: absolute; left: 0; right: 0; top: 46px; height: 8px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--line), var(--accent)); }
+.ruler .tick { position: absolute; top: 60px; transform: translateX(-50%); font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ruler .tick::before { content: ""; position: absolute; left: 50%; top: -10px; height: 8px; border-left: 1.5px solid var(--muted); }
+.ruler .pin { position: absolute; top: 0; transform: translateX(-50%); transition: left .45s cubic-bezier(.3,1.4,.5,1); }
+.ruler .pin .tag {
+  display: block; background: var(--accent); color: #fff; font-weight: 700; font-size: .85rem;
+  padding: 2px 10px; border-radius: 8px; white-space: nowrap; position: relative;
+}
+.ruler .pin .tag::after { content: ""; position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%);
+  border: 7px solid transparent; border-bottom: 0; border-top-color: var(--accent); }
+.ruler .ends { position: absolute; top: 86px; left: 0; right: 0; display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); }
+.readout { font-size: 1.1rem; }
+.readout small { display: block; font-weight: 400; font-size: .93rem; color: var(--muted); }
+
+/* 약속 2: 여섯 칸 띠 */
+.strip { display: flex; height: 46px; border-radius: 12px; overflow: hidden; border: 2px solid var(--accent); }
+.strip div { flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px;
+  background: var(--panel); font-size: .8rem; font-variant-numeric: tabular-nums; border-right: 1.5px solid var(--accent-soft); min-width: 0; }
+.strip div:last-child { border-right: 0; }
+.strip div:nth-child(odd) { background: color-mix(in srgb, var(--accent-soft) 45%, #fff); }
+.sum-line { font-variant-numeric: tabular-nums; font-size: .98rem; overflow-x: auto; white-space: nowrap; }
+.sum-line strong { color: var(--ok); }
+
+/* 약속 3 */
+.dice-row { display: flex; flex-wrap: wrap; gap: 12px; }
+.result-big { font-size: 1.12rem; }
+.warn { color: var(--bad); font-weight: 700; }
+
+/* ===== 퀴즈 ===== */
+.quiz { display: flex; flex-direction: column; gap: 20px; }
+.qlist { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.q { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.q .opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.q .opts button { font-weight: 500; font-size: .95rem; border-width: 1.5px; border-color: var(--line); padding: 6px 14px; }
+.q .opts button.right { background: var(--ok); color: #fff; border-color: var(--ok); }
+.q .opts button.wrong { background: var(--bad); color: #fff; border-color: var(--bad); }
+.q .fb { font-size: .93rem; color: var(--muted); min-height: 1.6em; }
+.score { font-size: 1.1rem; }
+
+.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.summary div { border-top: 3px solid var(--accent); padding-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+.summary b { font-size: 1.05rem; }
+.summary span { color: var(--muted); font-size: .93rem; }
+
+@media (max-width: 760px) {
+  .hero, .rule { grid-template-columns: 1fr; }
+  .qlist, .summary { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+</style>
+
+<div class="wrap">
+
+  <!-- ===== 히어로 ===== -->
+  <section class="hero" aria-labelledby="t-hero">
+    <div class="hero-text">
+      <div class="eyebrow">주사위 확률 교실</div>
+      <h1 id="t-hero">주사위 하나를 던져 봅시다</h1>
+      <p class="lead">어떤 숫자가 나올까요? 1이 나올 수도 있고, 6이 나올 수도 있겠죠? <strong>확률</strong>은 어떤 일이 얼마나 일어날 것 같은지를 숫자로 나타낸 거예요.</p>
+      <div class="faces" id="heroFaces" aria-label="주사위의 여섯 면"></div>
+      <p>확률에는 꼭 지켜야 하는 <strong>약속이 세 가지</strong> 있어요. 먼저 오른쪽 주사위를 여러 번 던져 보세요. 진짜 주사위가 있다면 같이 던져 봐도 좋아요.</p>
+      <p class="assume">이 주사위는 각 면에 1부터 6까지의 눈이 있고, 어떤 눈이든 나올 가능성이 똑같다고 생각해요.</p>
+    </div>
+
+    <div class="stage">
+      <div class="big-wrap">
+        <div id="bigDie"></div>
+        <div class="floor" aria-hidden="true"></div>
+      </div>
+      <div class="rolled" id="rolled" aria-live="polite">버튼을 눌러 던져 보세요</div>
+      <div class="btn-row">
+        <button class="primary" id="rollOne" type="button">한 번 던지기</button>
+        <button id="roll100" type="button">100번 던지기</button>
+        <button id="resetRoll" type="button">처음부터</button>
+      </div>
+      <div class="stats" id="stats" aria-label="던진 결과"></div>
+    </div>
+  </section>
+
+  <!-- ===== 약속 1 ===== -->
+  <section class="rule" aria-labelledby="t-r1">
+    <div class="rule-head"><span class="badge">약속 1</span><h2 id="t-r1">확률은 0부터 1 사이의 숫자예요</h2></div>
+    <div class="explain">
+      <p><strong>절대 일어나지 않는 일의 확률은 0</strong>이고, <strong>반드시 일어나는 일의 확률은 1</strong>이에요.</p>
+      <p>이 주사위에는 7이 없으니까 7이 나올 확률은 <span class="num">0</span>이에요.</p>
+      <p>확률이 0에 가까울수록 일어나기 어렵고, 1에 가까울수록 일어나기 쉬워요.</p>
+      <div class="formula">확률 = (그 일이 일어나는 눈의 개수) ÷ (전체 눈의 개수 6)</div>
+    </div>
+    <div class="lab">
+      <div class="lab-title">확률 자에 올려 보기 · 하나를 골라 보세요</div>
+      <div class="chips" id="r1chips" role="group" aria-label="일어날 일 고르기"></div>
+      <div class="ruler-box">
+        <div class="ruler" id="ruler">
+          <div class="track"></div>
+          <div class="pin" id="rulerPin"><span class="tag"></span></div>
+          <div class="ends"><span>← 일어나기 어려워요</span><span>일어나기 쉬워요 →</span></div>
+        </div>
+      </div>
+      <div class="dice-row" id="r1dice" aria-hidden="true"></div>
+      <div class="readout" id="r1read" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <!-- ===== 약속 2 ===== -->
+  <section class="rule" aria-labelledby="t-r2">
+    <div class="rule-head"><span class="badge">약속 2</span><h2 id="t-r2">일어날 수 있는 결과를 모두 모으면 확률은 1이에요</h2></div>
+    <div class="explain">
+      <p>주사위를 던지면 1, 2, 3, 4, 5, 6 중 <strong>하나는 꼭</strong> 나오겠죠?</p>
+      <p>그래서 "1부터 6까지의 숫자 중 하나가 나온다"는 일은 반드시 일어나니까 확률이 1이라고 할 수 있어요.</p>
+      <div class="formula">P(1~6 중 하나가 나온다) = 6/6 = 1</div>
+      <p>오른쪽 띠는 확률 1을 여섯 칸으로 나눈 모습이에요. 위에서 던진 결과도 아래에 모여요. 몇 번을 던지든, 나온 횟수를 다 더하면 던진 횟수와 똑같아요. "아무 숫자도 안 나온" 경우는 한 번도 없거든요.</p>
+    </div>
+    <div class="lab">
+      <div class="lab-title">모든 결과를 한 줄에 모으기</div>
+      <div class="strip" id="strip" aria-hidden="true"></div>
+      <div class="sum-line num">1/6 + 1/6 + 1/6 + 1/6 + 1/6 + 1/6 = 6/6 = <strong>1</strong></div>
+      <div class="sum-line" id="r2live" aria-live="polite"></div>
+      <button type="button" id="roll10" style="align-self:flex-start">10번 더 던져 보기</button>
+    </div>
+  </section>
+
+  <!-- ===== 약속 3 ===== -->
+  <section class="rule" aria-labelledby="t-r3">
+    <div class="rule-head"><span class="badge">약속 3</span><h2 id="t-r3">동시에 일어날 수 없는 일은 확률을 더해도 돼요</h2></div>
+    <div class="explain">
+      <p>주사위를 한 번 던졌을 때 1과 2가 동시에 나올 수는 없죠?</p>
+      <p>1이 나올 확률은 여섯 가지 중 하나니까 <span class="num">1/6</span>이고, 2가 나올 확률도 <span class="num">1/6</span>이에요.</p>
+      <div class="formula">P(1 또는 2) = 1/6 + 1/6 = 2/6</div>
+      <p>같은 방법으로 여섯 가지 눈이 나올 확률을 모두 더하면 <span class="num">6/6 = 1</span>이 되니까 두 번째 약속과도 맞아요.</p>
+    </div>
+    <div class="lab">
+      <div class="lab-title">"○ 또는 ○" 만들기 · 눈을 여러 개 골라 보세요</div>
+      <div class="chips" id="r3chips" role="group" aria-label="눈 고르기"></div>
+      <div class="dice-row" id="r3dice" aria-hidden="true"></div>
+      <div class="formula" id="r3formula"></div>
+      <div class="result-big" id="r3read" aria-live="polite"></div>
+      <button type="button" id="both" style="align-self:flex-start">1이면서 2인 눈 찾기</button>
+      <div id="bothRead" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <!-- ===== 퀴즈 ===== -->
+  <section class="quiz" aria-labelledby="t-quiz">
+    <div class="eyebrow">확인 문제</div>
+    <h2 id="t-quiz">세 가지 약속, 잘 기억하고 있나요?</h2>
+    <div class="score" id="score" aria-live="polite">0 / 4 맞힘</div>
+    <div class="qlist" id="qlist"></div>
+  </section>
+
+  <section aria-label="한눈에 정리">
+    <div class="summary">
+      <div><b>약속 1</b><span>확률은 0 이상 1 이하. 안 일어나면 0, 꼭 일어나면 1.</span></div>
+      <div><b>약속 2</b><span>일어날 수 있는 결과를 모두 모으면 확률은 1.</span></div>
+      <div><b>약속 3</b><span>동시에 안 일어나는 일은 "또는"일 때 확률을 더한다.</span></div>
+    </div>
+  </section>
+</div>
+
+<script>
+// ---------- 주사위 면 그리기 ----------
+// 3×3 칸(0~8번) 중 눈을 찍을 칸 번호
+const PIPS = { 1: [4], 2: [2, 6], 3: [2, 4, 6], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+const FACES = [1, 2, 3, 4, 5, 6];
+function dieHTML(n, extra = "") {
+  const cells = Array.from({ length: 9 }, (_, i) => `<i class="${PIPS[n].includes(i) ? "on" : ""}"></i>`).join("");
+  return `<div class="die ${n === 1 ? "one" : ""} ${extra}" data-n="${n}">${cells}</div>`;
+}
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+document.getElementById("heroFaces").innerHTML = FACES.map(n => dieHTML(n, "sm")).join("");
+
+// ---------- 히어로: 던지기 실험 ----------
+const bigDie = document.getElementById("bigDie");
+const rolled = document.getElementById("rolled");
+const statsEl = document.getElementById("stats");
+const counts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+let total = 0;
+bigDie.innerHTML = dieHTML(6);
+
+const rollOnce = () => { const n = 1 + Math.floor(Math.random() * 6); counts[n]++; total++; return n; };
+
+function renderStats() {
+  statsEl.innerHTML = FACES.map(n => {
+    const ratio = total ? counts[n] / total : 0;
+    return `<div class="stat-row">
+      ${dieHTML(n, "sm")}
+      <div class="bar"><i style="width:${ratio * 100}%"></i><b style="left:${100 / 6}%"></b></div>
+      <span class="num">${counts[n]}번 · ${ratio.toFixed(2)}</span>
+    </div>`;
+  }).join("") + `<div class="note">${total ? `지금까지 ${total}번 던졌어요. ` : ""}점선은 약속대로 계산한 확률 1/6(약 0.17)이에요. 많이 던질수록 막대가 점선에 가까워져요.</div>`;
+  renderR2();
+}
+
+document.getElementById("rollOne").addEventListener("click", () => {
+  const n = rollOnce();
+  const face = () => bigDie.firstElementChild;
+  if (reduceMotion) { bigDie.innerHTML = dieHTML(n); }
+  else {
+    // 굴러가는 동안 무작위 면을 잠깐씩 보여 주고, 마지막에 결과 면으로 멈춰요
+    let t = 0;
+    const timer = setInterval(() => {
+      bigDie.innerHTML = dieHTML(1 + Math.floor(Math.random() * 6));
+      face().classList.add("rolling");
+      face().style.animationDelay = `-${t * 70}ms`;
+      if (++t >= 8) { clearInterval(timer); bigDie.innerHTML = dieHTML(n); }
+    }, 70);
+  }
+  setTimeout(() => { rolled.textContent = `${n}이(가) 나왔어요!`; }, reduceMotion ? 0 : 580);
+  renderStats();
+});
+document.getElementById("roll100").addEventListener("click", () => {
+  for (let t = 0; t < 100; t++) rollOnce();
+  rolled.textContent = "100번 더 던졌어요";
+  renderStats();
+});
+document.getElementById("resetRoll").addEventListener("click", () => {
+  FACES.forEach(n => counts[n] = 0); total = 0;
+  bigDie.innerHTML = dieHTML(6);
+  rolled.textContent = "버튼을 눌러 던져 보세요";
+  renderStats();
+});
+
+// ---------- 약속 1: 확률 자 ----------
+const R1 = [
+  { label: "7이 나온다", faces: [], msg: "주사위에 7은 없어요 → 절대 일어나지 않아요" },
+  { label: "1이 나온다", faces: [1], msg: "여섯 가지 중 하나" },
+  { label: "짝수가 나온다", faces: [2, 4, 6], msg: "2, 4, 6 → 여섯 가지 중 세 가지, 딱 가운데" },
+  { label: "6보다 작은 수가 나온다", faces: [1, 2, 3, 4, 5], msg: "1~5 → 1에 아주 가까워요" },
+  { label: "1~6 중 하나가 나온다", faces: [1, 2, 3, 4, 5, 6], msg: "어떤 눈이든 다 해당 → 반드시 일어나요" },
+];
+const ruler = document.getElementById("ruler");
+[["0", 0], ["1/6", 1], ["3/6", 3], ["5/6", 5], ["1", 6]].forEach(([txt, k]) => {
+  ruler.insertAdjacentHTML("beforeend", `<span class="tick" style="left:${k / 6 * 100}%">${txt}</span>`);
+});
+const pin = document.getElementById("rulerPin");
+const r1chips = document.getElementById("r1chips");
+const r1dice = document.getElementById("r1dice");
+const r1read = document.getElementById("r1read");
+r1chips.innerHTML = R1.map((e, i) => `<button class="chip" type="button" data-i="${i}" aria-pressed="false">${e.label}</button>`).join("");
+r1dice.innerHTML = FACES.map(n => dieHTML(n, "md")).join("");
+
+function pickR1(i) {
+  const e = R1[i], k = e.faces.length;
+  [...r1chips.children].forEach((b, j) => b.setAttribute("aria-pressed", j === i));
+  pin.style.left = (k / 6 * 100) + "%";
+  pin.querySelector(".tag").textContent = k === 0 ? "0" : k === 6 ? "1" : `${k}/6`;
+  [...r1dice.children].forEach(d => d.classList.toggle("dim", !e.faces.includes(+d.dataset.n)));
+  r1read.innerHTML = `${e.label}: <span class="num">${k}/6${k === 0 ? " = 0" : k === 6 ? " = 1" : ""}</span><small>${e.msg}</small>`;
+}
+r1chips.addEventListener("click", ev => { const b = ev.target.closest(".chip"); if (b) pickR1(+b.dataset.i); });
+pickR1(0);
+
+// ---------- 약속 2: 모두 모으면 1 ----------
+document.getElementById("strip").innerHTML = FACES.map(n => `<div>${n}<span style="color:var(--muted)">·</span>1/6</div>`).join("");
+function renderR2() {
+  const el = document.getElementById("r2live");
+  if (!total) { el.textContent = "위에서 주사위를 던지면 여기에 횟수가 모여요."; return; }
+  el.innerHTML = `던진 결과: ${FACES.map(n => counts[n]).join(" + ")} = ${total}번 → ${total}/${total} = <strong>1</strong>`;
+}
+document.getElementById("roll10").addEventListener("click", () => {
+  for (let t = 0; t < 10; t++) rollOnce();
+  renderStats();
+});
+
+// ---------- 약속 3: 또는 ----------
+const chosen = new Set([1, 2]);
+const r3chips = document.getElementById("r3chips");
+const r3dice = document.getElementById("r3dice");
+r3chips.innerHTML = FACES.map(n => `<button class="chip" type="button" data-n="${n}" aria-pressed="false">${n}</button>`).join("");
+r3dice.innerHTML = FACES.map(n => dieHTML(n, "md")).join("");
+
+function renderR3(noneMode) {
+  [...r3chips.children].forEach(b => b.setAttribute("aria-pressed", chosen.has(+b.dataset.n)));
+  [...r3dice.children].forEach(d => {
+    const on = !noneMode && chosen.has(+d.dataset.n);
+    d.classList.toggle("dim", !on);
+    d.classList.toggle("pick", on);
+  });
+  const sel = FACES.filter(n => chosen.has(n));
+  const f = document.getElementById("r3formula"), r = document.getElementById("r3read");
+  if (!sel.length) { f.textContent = "눈을 하나 이상 골라 보세요"; r.textContent = ""; return; }
+  const k = sel.length;
+  f.textContent = `P(${sel.join(" 또는 ")}) = ${sel.map(() => "1/6").join(" + ")} = ${k}/6`;
+  r.innerHTML = `골라진 눈을 세어 보면 <span class="num">${k}</span>개 → <span class="num">${k}/6</span>, 더한 값과 똑같아요!` +
+    (k === 6 ? "<br>여섯 개를 다 고르면 6/6 = 1. 약속 2와 같아요." : "");
+}
+r3chips.addEventListener("click", ev => {
+  const b = ev.target.closest(".chip"); if (!b) return;
+  const n = +b.dataset.n;
+  chosen.has(n) ? chosen.delete(n) : chosen.add(n);
+  document.getElementById("bothRead").textContent = "";
+  renderR3();
+});
+document.getElementById("both").addEventListener("click", () => {
+  renderR3(true); // 1이면서 2인 눈은 하나도 없어요
+  document.getElementById("bothRead").innerHTML =
+    `<span class="warn">하나도 없어요.</span> 한 번 던졌을 때 1과 2는 동시에 나올 수 없어요. 그래서 겹치는 부분 없이 그냥 더할 수 있는 거예요.`;
+});
+renderR3();
+
+// ---------- 퀴즈 ----------
+const QUIZ = [
+  { q: "3이 나올 확률은?", opts: ["1/6", "3/6", "3"], a: 0, why: "3은 여섯 가지 중 하나 → 1/6 (약속 1)" },
+  { q: "0이 나올 확률은?", opts: ["0", "1/6", "1"], a: 0, why: "주사위에 0은 없어요. 절대 일어나지 않는 일은 0 (약속 1)" },
+  { q: "5 또는 6이 나올 확률은?", opts: ["1/6", "2/6", "11/6"], a: 1, why: "동시에 안 나오니까 1/6 + 1/6 = 2/6 (약속 3)" },
+  { q: "1부터 6까지의 숫자 중 하나가 나올 확률은?", opts: ["5/6", "1", "6"], a: 1, why: "반드시 일어나는 일이니까 1 (약속 2)" },
+];
+const qlist = document.getElementById("qlist");
+const solved = new Set();
+qlist.innerHTML = QUIZ.map((x, i) => `
+  <div class="q" data-i="${i}">
+    <h3>${i + 1}. ${x.q}</h3>
+    <div class="opts">${x.opts.map((o, j) => `<button type="button" data-j="${j}">${o}</button>`).join("")}</div>
+    <div class="fb" aria-live="polite"></div>
+  </div>`).join("");
+qlist.addEventListener("click", ev => {
+  const b = ev.target.closest(".opts button"); if (!b) return;
+  const card = b.closest(".q"), i = +card.dataset.i, x = QUIZ[i];
+  const fb = card.querySelector(".fb");
+  card.querySelectorAll(".opts button").forEach(o => o.classList.remove("right", "wrong"));
+  if (+b.dataset.j === x.a) { b.classList.add("right"); fb.textContent = "정답! " + x.why; solved.add(i); }
+  else { b.classList.add("wrong"); fb.textContent = "다시 생각해 봐요."; }
+  document.getElementById("score").textContent = `${solved.size} / ${QUIZ.length} 맞힘` + (solved.size === QUIZ.length ? " · 세 가지 약속 완벽해요!" : "");
+});
+
+renderStats();
+</script>
